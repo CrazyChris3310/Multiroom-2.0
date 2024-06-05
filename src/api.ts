@@ -227,6 +227,9 @@ const api = {
   getConferences: function (): Promise<x.ListType> {
     return helper.get<x.ListType>('/rooms')
   },
+  getConferenceInfo: function(id: string): Promise<x.ConferenceInfoType> {
+    return helper.get<x.ConferenceInfoType>('/rooms?id=' + id)
+  },
   createConference: async function(conferenceInfo: x.ConferenceInfoType): Promise<x.ConferenceCreationResponse> {
     return helper.postAndParse<x.ConferenceCreationResponse>("/rooms", conferenceInfo)
   },

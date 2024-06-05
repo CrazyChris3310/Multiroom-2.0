@@ -18,7 +18,7 @@
       scrollable
     >
       <BForm @submit.stop.prevent="resHandleSubmit">
-        <BFormGroup label="Title:">
+        <BFormGroup label="Title:" >
           <BFormInput
             v-model="resFormName"
             type="text"
@@ -26,7 +26,7 @@
             required
           ></BFormInput>
         </BFormGroup>
-        <BFormGroup label="Description:">
+        <BFormGroup label="Description:" class="modal-options">
           <BFormTextarea
             v-model="resFormGrammarText"
             type="text"
@@ -37,7 +37,7 @@
         </BFormGroup>
         <BRow>
           <BCol>
-            <BFormGroup label="Users to invite:">
+            <BFormGroup label="Users to invite:" class="modal-options">
               <ListView v-bind:itemsSource="resFormImportersFiltered">
                 <template v-slot:title="item">{{ (item as UsersListItem).name }}</template>
                 <template v-slot:titleStatus="item">
@@ -80,7 +80,7 @@
             </BInputGroup>
           </BCol>
           <BCol>
-            <BFormGroup label="Invited users:">
+            <BFormGroup label="Invited users:" class="modal-options">
               <ListView v-bind:itemsSource="resFormImportersSelected">
                 <template v-slot:title="item">{{ (item as UsersListItem).name }}</template>
                 <template v-slot:titleStatus="item">
@@ -91,24 +91,26 @@
               </ListView>
               <BCard
                 v-if="resFormImportersSelected.length == 0"
-                title="No importers"
+                title="No participants"
                 sub-title="were choosen"
                 class="text-center"
               >
-                <BCard-text class="text-center">Choose them from the list on the right</BCard-text>
+                <BCard-text class="text-center">Choose them from the list on the left</BCard-text>
               </BCard>
             </BFormGroup>
           </BCol>
           <BCol>
-            <BForm-checkbox v-model="resStartNow">Start now</BForm-checkbox>
-            <BFormCheckbox v-model="isPublic">Public conference</BFormCheckbox>
-            <BCollapse id="resStartCollapse" class="mt-2" :visible="!resStartNow">
-              <BCard>
-                When the conference planned to start?
-                <BFormInput type="date" class="mt-2"></BFormInput>
-                <BFormInput type="time" class="mt-2"></BFormInput>
-              </BCard>
-            </BCollapse>
+            <BFormGroup label="Conference options:" class="modal-options">
+              <BFormCheckbox v-model="resStartNow">Start now</BFormCheckbox>
+              <BFormCheckbox v-model="isPublic">Public conference</BFormCheckbox>
+              <BCollapse id="resStartCollapse" class="mt-2" :visible="!resStartNow">
+                <BCard>
+                  When the conference planned to start?
+                  <BFormInput type="date" class="mt-2"></BFormInput>
+                  <BFormInput type="time" class="mt-2"></BFormInput>
+                </BCard>
+              </BCollapse>
+            </BFormGroup>
           </BCol>
         </BRow>
       </BForm>
@@ -168,7 +170,7 @@
           <template v-slot:title="item">{{ (item as ConferenceListItem).title }}</template>
           <template v-slot:titleStatus="item">
             <em
-              >{{ (item as ConferenceListItem).duration }} for
+              >{{ (item as ConferenceListItem).started }} /
               {{ (item as ConferenceListItem).membersOnline }} users</em
             >
             &nbsp;
@@ -276,6 +278,7 @@ async function doResetSearch() {
   filterApplied.value = false
   try {
     const conferences = await api.getConferences()
+    items.value = []
     if (conferences.Items) {
       (conferences.Items as x.ConferenceInfoType[]).forEach(r => items.value.push(new ConferenceListItem(r)))
     }
@@ -370,7 +373,7 @@ async function resHandleSubmit() {
   resFormWaiting.value = true
   const conferenceInfo = {
       Title: resFormName.value,
-      Description: resFormGrammarText.value
+      Description: resFormGrammarText.value,
   } as x.ConferenceInfoType
   const response =  await api.createConference(conferenceInfo)
   resFormWaiting.value = false
@@ -420,5 +423,9 @@ async function resHandleSubmit() {
       font-size: 12px;
     }
   }
+}
+
+.modal-options {
+  margin-top: 0.5em;
 }
 </style>

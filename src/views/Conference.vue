@@ -6,7 +6,11 @@
 
     <BContainer>
       <BRow>
-        <BCol><h4>Conference 1 - 45:02 for 2 users</h4></BCol>
+        <BCol v-if="roomInfo != null">
+          <h4>
+            {{ roomInfo!.title }} - <Stopwatch :startStamp="roomInfo!.startStamp"></Stopwatch>
+          </h4>
+        </BCol>
       </BRow>
     </BContainer>
 
@@ -34,16 +38,22 @@
           </BCol>
           <BCol>
             <BInputGroup size="md" class="mt-3 mb-3">
-              <p>Select microphone</p>
-              <BFormSelect v-model="selectedMicro" :options="soundDevices">
+              <!-- <p class="mt-2">Select microphone:  </p> -->
+              <BFormSelect
+                class="mt-3"
+                v-model="selectedMicro"
+                :options="soundDevices"
+                label-field="Select microphone"
+              >
                 <template #first>
                   <BFormSelectOption :value="null" disabled
                     >-- Please select a microphone --</BFormSelectOption
                   >
                 </template>
               </BFormSelect>
-              <p>Select camera</p>
+              <!-- <p>Select camera</p> -->
               <BFormSelect
+                class="mt-3"
                 v-model="selectedCamera"
                 :options="cameraDevices"
                 @change="changePreview"
@@ -93,6 +103,7 @@
     <BRow>
       <BCol>
         <BListGroup horizontal>
+          <!-- <BButton variant="success" @click="modal = !modal">Start</BButton> -->
           <BListGroupItem
             v-for="user in users.values()"
             v-bind:key="user.id"
@@ -117,8 +128,20 @@
                     </tr>
                     <tr valign="bottom" v-if="user.id == -1">
                       <td>
-                        <BButton variant="success" class="mt-3" @click="toggleMute(s.id)" >Mute</BButton>
-                        <BButton variant="success" class="mt-3" @click="stopSingleStream(-1, s.id)">Stop</BButton>
+                        <BButton
+                          variant="success"
+                          class="mt-3"
+                          @click="toggleMute(s.id)"
+                          style="margin-right: 0.3em"
+                          >Mute</BButton
+                        >
+                        <BButton
+                          variant="success"
+                          class="mt-3"
+                          @click="stopSingleStream(-1, s.id)"
+                          style="margin-left: 0.3em"
+                          >Stop</BButton
+                        >
 
                         <!-- <b-img v-if="s.hasAudio && !s.isMuted" src="../assets/Audio_16x.png" />
                         <b-img v-if="s.hasAudio && s.isMuted" src="../assets/AudioMute_16x.png" /> -->
@@ -148,16 +171,18 @@
     </BRow>
 
     <BRow class="mt-3">
-      <BCol>
+      <BCol lg="9">
         <video
           autoplay
           playsinline
           :srcObject.prop="viewPortStream"
           style="width: 100%; background-color: black"
         ></video>
+        <BButton variant="success" class="mt-3 mx-2" @click="modal = !modal">SendMedia</BButton>
+        <BButton variant="danger" class="mt-3 mx-2" @click="leaveConference">Leave</BButton>
         <!-- <b-img style="background-color: black" width="1280" heigh="720" /> -->
       </BCol>
-      <BCol>
+      <BCol lg="3">
         <BContainer fluid>
           <!-- <BRow>
             <BCol>
@@ -187,12 +212,6 @@
         </BContainer>
       </BCol>
     </BRow>
-    <BRow>
-      <BCol>
-        <BButton variant="success" class="mt-3" @click="modal = !modal">SendMedia</BButton>
-        <BButton variant="danger" class="mt-3" @click="leaveConference">Leave</BButton>
-      </BCol>
-    </BRow>
   </BContainer>
 </template>
 
@@ -203,10 +222,30 @@ import api from '../api'
 // import * as x from '../../xml/my-json-types'
 /* eslint-disable */
 // @ts-ignore
-import { computed, nextTick, onMounted, ref, type ComponentPublicInstance } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeMount,
+  onMounted,
+  ref,
+  type ComponentPublicInstance
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { commands, ListViewItem, SentMediaStream } from '@/components/data'
+import { commands, ConferenceListItem, ListViewItem, SentMediaStream } from '@/components/data'
+import Stopwatch from './Stopwatch.vue'
 /* eslint-enable */
+
+function dateToUtc(date: Date) {
+  var now_utc = Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds()
+  )
+  return new Date(now_utc)
+}
 
 class UserMediaStreamInfo {
   public constructor(
@@ -244,7 +283,7 @@ const selectedMicro = ref<string | null>(null)
 const selectedCamera = ref<string | null>(null)
 const modal = ref(false)
 
-const previewStream = ref<MediaStream|null>(null);
+const previewStream = ref<MediaStream | null>(null)
 const viewPortStream = ref<MediaStream>()
 
 const isConnected = ref(false)
@@ -254,6 +293,8 @@ let sck = ref<WebSocket | null>(null)
 let senders: Map<string, Array<RTCRtpSender>> = new Map()
 
 const username = ref(localStorage.getItem('username') || 'Guest')
+
+const roomInfo = ref<ConferenceListItem>()
 
 const soundDevices = computed(() => {
   return devices.value
@@ -278,11 +319,15 @@ function gainDevices() {
 }
 
 function changePreview() {
-  getDeviceMedia('video').then(stream => previewStream.value = stream);
+  getDeviceMedia('video').then((stream) => (previewStream.value = stream))
 }
 
 function toggleMute(streamId: string) {
-  users.value.get(-1)!.mediaStreams.get(streamId)?.getAudioTracks().forEach(it => it.enabled = !it.enabled)
+  users.value
+    .get(-1)!
+    .mediaStreams.get(streamId)
+    ?.getAudioTracks()
+    .forEach((it) => (it.enabled = !it.enabled))
 }
 
 function doConnect() {
@@ -319,16 +364,16 @@ function sendMedia(type: string, mediaInfo?: SentMediaStream) {
     let foundUser = getOrCreateUser(-1, username.value)
     foundUser.mediaStreams.set(stream.id, stream)
     let sendersVar = new Array<RTCRtpSender>()
-    stream
-      .getTracks()
-      .forEach((track) => {
-        sendersVar.push(peer_connection!!.addTrack(track, stream))
-      })
-    senders.set(stream.id, (senders.get(stream.id)||[]).concat(sendersVar))
+    stream.getTracks().forEach((track) => {
+      sendersVar.push(peer_connection!!.addTrack(track, stream))
+    })
+    senders.set(stream.id, (senders.get(stream.id) || []).concat(sendersVar))
     if (!mediaInfo && type != 'screen') {
-        const sentMediaStreams = JSON.parse(localStorage.getItem('sentMedia')||'[]') as Array<SentMediaStream>
-        sentMediaStreams.push(createSentMedia(type, stream))
-        localStorage.setItem('sentMedia', JSON.stringify(sentMediaStreams))
+      const sentMediaStreams = JSON.parse(
+        localStorage.getItem('sentMedia') || '[]'
+      ) as Array<SentMediaStream>
+      sentMediaStreams.push(createSentMedia(type, stream))
+      localStorage.setItem('sentMedia', JSON.stringify(sentMediaStreams))
     }
     // previewStream.value = null
     previewStream.value = null
@@ -336,6 +381,7 @@ function sendMedia(type: string, mediaInfo?: SentMediaStream) {
       doConnect()
     }
     modal.value = false
+    viewPortStream.value = stream;
   })
 }
 
@@ -346,8 +392,14 @@ function createSentMedia(type: string, stream: MediaStream) {
   } else if (type == 'audio') {
     media.videoDevice = stream.getTracks()[0].getSettings().deviceId!
   } else if (type == 'both') {
-    media.videoDevice = stream.getTracks().find(it => it.kind == 'video')!.getSettings().deviceId!
-    media.audioDevice = stream.getTracks().find(it => it.kind == 'video')!.getSettings().deviceId!
+    media.videoDevice = stream
+      .getTracks()
+      .find((it) => it.kind == 'video')!
+      .getSettings().deviceId!
+    media.audioDevice = stream
+      .getTracks()
+      .find((it) => it.kind == 'video')!
+      .getSettings().deviceId!
   } else if (type == 'screen') {
     media.videoDevice = stream.getTracks()[0].getSettings().deviceId!
   }
@@ -371,7 +423,10 @@ function getOrCreateUser(id: number, username?: string) {
 function getDeviceMedia(type: string, mediaInfo?: SentMediaStream) {
   let options = {}
   if (type === 'video') {
-    options = { video: { width: 1280, height: 720, deviceId: mediaInfo?.videoDevice || selectedCamera.value }, audio: false }
+    options = {
+      video: { width: 1280, height: 720, deviceId: mediaInfo?.videoDevice || selectedCamera.value },
+      audio: false
+    }
   } else if (type === 'audio') {
     options = { video: false, audio: { deviceId: mediaInfo?.audioDevice || selectedMicro.value } }
   } else if (type === 'both') {
@@ -384,7 +439,9 @@ function getDeviceMedia(type: string, mediaInfo?: SentMediaStream) {
 }
 
 function getScreenMedia(mediaInfo?: SentMediaStream) {
-  let video: boolean|MediaTrackConstraints = mediaInfo ? { deviceId: mediaInfo!.videoDevice } : true
+  let video: boolean | MediaTrackConstraints = mediaInfo
+    ? { deviceId: mediaInfo!.videoDevice }
+    : true
   return navigator.mediaDevices.getDisplayMedia({ video: video, audio: false })
 }
 
@@ -395,6 +452,16 @@ function getScreenMedia(mediaInfo?: SentMediaStream) {
 function getResWaiter(): ComponentPublicInstance | null {
   return resWaiter.value
 }
+
+onBeforeMount(async () => {
+  let pathSegments = window.location.pathname.split('/')
+  let roomId = pathSegments[pathSegments.length - 1]
+
+  const info = await api.getConferenceInfo(roomId)
+  roomInfo.value = new ConferenceListItem(info)
+
+  console.log(roomInfo.value.startStamp)
+})
 
 onMounted(async () => {
   // on displayed
@@ -407,13 +474,12 @@ onMounted(async () => {
   const mediaString = localStorage.getItem('sentMedia')
   if (mediaString) {
     let sentMedia = JSON.parse(mediaString!) as Array<SentMediaStream>
-    sentMedia.forEach(mediaInfo => {
+    sentMedia.forEach((mediaInfo) => {
       sendMedia(mediaInfo.type, mediaInfo)
     })
   } else {
-    sendMedia('none')
+    // sendMedia('none')
   }
-
 
   const id = currentRoute.params.conferenceId as string
   if (id) {
@@ -434,7 +500,7 @@ function createWebSocket() {
     let host = window.location.hostname
     let port = window.location.port || (protocol === 'wss' ? 443 : 80)
 
-    return protocol + '://' + host + ':' + 443 + (ep.startsWith('/') ? ep : ('/' + ep));
+    return protocol + '://' + host + ':' + 443 + (ep.startsWith('/') ? ep : '/' + ep)
     // return 'wss://localhost:443' + (ep.startsWith('/') ? ep : '/' + ep)
   }
 
@@ -591,30 +657,44 @@ function createPeer(dest: number) {
 }
 
 function stopSingleStream(dest: number, streamId: string) {
-    let user = getOrCreateUser(dest)
-    user.mediaStreams.get(streamId)?.getTracks().forEach(it => it.stop())
-    user.mediaStreams.delete(streamId)
-    if (dest == -1) {
-      senders.get(streamId)?.forEach(it => peer_connection?.removeTrack(it))
-      sck.value!.send(JSON.stringify({ control: { type: commands.REMOVE_STREAM, streamId: streamId } }));
+  let user = getOrCreateUser(dest)
+  user.mediaStreams
+    .get(streamId)
+    ?.getTracks()
+    .forEach((it) => it.stop())
+  user.mediaStreams.delete(streamId)
+  if (dest == -1) {
+    senders.get(streamId)?.forEach((it) => peer_connection?.removeTrack(it))
+    sck.value!.send(
+      JSON.stringify({ control: { type: commands.REMOVE_STREAM, streamId: streamId } })
+    )
 
-      const mediaString = localStorage.getItem('sentMedia')
-      if (mediaString) {
-        let sentMedia = JSON.parse(mediaString!) as Array<SentMediaStream>
-        let streamIdx = sentMedia.findIndex(it => it.id == streamId)
-        if (streamIdx > -1) {
-          sentMedia.splice(streamIdx, 1)
+    const mediaString = localStorage.getItem('sentMedia')
+    if (mediaString) {
+      let sentMedia = JSON.parse(mediaString!) as Array<SentMediaStream>
+      let streamIdx = sentMedia.findIndex((it) => it.id == streamId)
+      if (streamIdx > -1) {
+        sentMedia.splice(streamIdx, 1)
+      }
+      localStorage.setItem('sentMedia', JSON.stringify(sentMedia))
+    }
+  }
+  if (streamId == viewPortStream.value?.id) {
+    for (let pp of users.value.values()) {
+      for (let stm of pp.mediaStreams.values()) {
+        if (stm.getVideoTracks().length > 0) {
+          viewPortStream.value = stm;
         }
-        localStorage.setItem('sentMedia', JSON.stringify(sentMedia))
       }
     }
+  }
 }
 
 function leaveConference() {
   sck.value!.close()
   sck.value = null
   localStorage.removeItem('sentMedia')
-  router.push("/app/conferences")
+  router.push('/app/conferences')
 }
 </script>
 

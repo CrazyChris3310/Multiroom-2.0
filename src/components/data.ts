@@ -25,21 +25,26 @@ export class ConferenceListItem extends ListViewItem {
   public title = ''
   public description = ''
   public statusStamp = ''
-  public duration = ''
+  public started = ''
   public membersOnline = 0
   public isFinished = false
+  public startStamp = 0
 
   public constructor(info: x.ConferenceInfoType) {
     super()
     this.info = info
     this.title = info.Title
     this.description = info.Description
+    this.startStamp = info.StartStamp?.Ticks
+    this.membersOnline = info.Participants
+    this.started = new Date(info.StartStamp?.Ticks).toLocaleString()
     // TODO other props
   }
 
   public key(): any {
     return this.info.Id
   }
+
 }
 
 export class UsersListItem extends ListViewItem {
